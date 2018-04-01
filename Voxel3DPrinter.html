@@ -1,0 +1,375 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <style>
+            body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+        </style>
+    </head>
+    <body>
+
+        <script src="build/three.js"></script>
+        <script src="js/Detector.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/DragControls.js"></script>
+		<script src="js/TransformControls.js"></script>
+		<script src="js/STLExporter.js"></script>
+		
+        <script>
+
+            var camera, scene, renderer;
+			var raycaster;
+			var plane;
+			var gridHelper;
+			var mouse;
+			var isShiftDown = false;
+			var dragged = false;
+			var clicked = false;
+            var controls;
+			var rollOverMesh, rollOverMaterial;
+			var cubeGeo, cubeMaterial;
+			var objects = [];
+
+			var unitbox = 100;
+			var startgrid = 3000;
+
+            function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'center';
+				info.innerHTML = '<button id="btNewData">New</button><button id="btUploadData">Upload</button><button id="btDownData">Download</button><button id="btDownSTLData">Export STL</button><br><label>Press Shift to remove</label>';
+				container.appendChild( info );
+
+				var btDownData = document.getElementById("btDownData");
+				btDownData.addEventListener("click", onbtDownDataClick, false);	
+				var btUploadData = document.getElementById("btUploadData");
+				btUploadData.addEventListener("click", onbtUploadDataClick, false);	
+				var btNewData = document.getElementById("btNewData");
+				btNewData.addEventListener("click", onbtNewDataClick, false);
+				var btDownSTLData = document.getElementById("btDownSTLData");
+				btDownSTLData.addEventListener("click", onbtDownDataSTLClick, false);	
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.appendChild( renderer.domElement );
+
+                camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.set( 800, 1200, 1500 );
+
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+				//controls.enableDamping = true;
+				//controls.dampingFactor = 0.25;
+				controls.addEventListener( 'change', function() {
+					console.log("change");
+					dragged = true;
+					render;
+				} ); 
+				controls.addEventListener( 'start', function() {
+					console.log("start");
+				} );
+				controls.addEventListener( 'end', function() {
+					console.log("end");
+					setTimeout( function() { dragged = false;  }, 1500 );
+				});
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xf0f0f0 );
+
+				gridHelper = new THREE.GridHelper( startgrid, startgrid * 1.0 / unitbox );
+				scene.add( gridHelper );
+
+				// roll-over helpers
+				var rollOverGeo = new THREE.BoxGeometry( unitbox, unitbox, unitbox );
+				rollOverMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000, opacity: 0.5, transparent: true } );
+				rollOverMesh = new THREE.Mesh( rollOverGeo, rollOverMaterial );
+				rollOverMesh.visible = false;
+				scene.add( rollOverMesh );
+
+				cubeGeo = new THREE.BoxGeometry( unitbox, unitbox, unitbox );
+				cubeMaterial = new THREE.MeshLambertMaterial( { color: 0x7777FF } );
+
+				var geometry = new THREE.PlaneBufferGeometry( startgrid, startgrid );
+				geometry.rotateX( - Math.PI / 2 );				
+				plane = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { visible: true } ) );
+				plane.position.z  = -0.01;
+				scene.add( plane );
+				objects.push( plane );
+
+				raycaster = new THREE.Raycaster();
+				mouse = new THREE.Vector2();
+
+				var ambientLight = new THREE.AmbientLight( 0x606060 );
+				scene.add( ambientLight );
+
+				var directionalLight = new THREE.DirectionalLight( 0xffffff );
+				directionalLight.position.set( 1, 0.75, 0.5 ).normalize();
+				scene.add( directionalLight );
+
+                window.addEventListener( 'resize', onWindowResize, false );
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+				document.addEventListener( 'keydown', onDocumentKeyDown, false );
+				document.addEventListener( 'keyup', onDocumentKeyUp, false );
+
+            }
+
+			function saveSTL( scene, filename ){  
+				var exporter = new THREE.STLExporter();
+				var stlString = exporter.parse( scene );
+				
+				var file = new Blob([stlString], {type: 'text/plain'});
+
+				var a = document.createElement('a'),
+				url = URL.createObjectURL(file);
+				a.href = url;
+				a.download = filename;
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() {
+				document.body.removeChild(a);
+				window.URL.revokeObjectURL(url);  
+				}, 0); 
+			}
+
+
+
+			
+
+			function download(data, filename, type) {
+				var file = new Blob([data], {type: type});
+
+				var a = document.createElement('a'),
+					url = URL.createObjectURL(file);
+				a.href = url;
+				a.download = filename;
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() {
+				document.body.removeChild(a);
+				window.URL.revokeObjectURL(url);  
+				}, 0); 
+
+			}
+
+			function onbtNewDataClick() {
+				var r = confirm("Are you sure?");
+				if (r == true) {
+					removeAllVoxel();	
+					render();
+				}
+			}
+
+			function removeAllVoxel() {
+				var i = objects.length-1;
+				while (i--) {
+					var b = objects[i+1]; 
+					scene.remove(b);
+					objects.splice(i+1, 1); 
+				};
+
+
+			}
+
+			function onbtDownDataSTLClick() {
+
+				saveSTL(scene,"voxelscene.stl");
+
+			}
+
+
+			function onbtDownDataClick() {
+
+				var data = '';
+				//for(var b in objects.slice(1)) { 
+				//	debugger;
+				for(var i = 1; i < objects.length; i++) {
+					var b = objects[i]; 
+					data = data.concat(b.position.x).concat(';').concat(b.position.y).concat(';').concat(b.position.z).concat(";").concat(unitbox).concat(";").concat(b.material.color.getHexString());
+					data += "\r\n";
+				}				
+				download(data,'test.csv','text/csv');
+
+			}
+
+			function onbtUploadDataClick() {
+
+				var r = confirm("Are you sure?");
+				if (r == true) {
+					var input = document.createElement('input');
+					input.type = 'file';
+					input.onchange = function(event){
+						var f = event.target.files[0]; 
+						var reader = new FileReader();
+						reader.onload = function(){
+							var text = reader.result;
+							var lines = text.split(/[\r\n]+/g);
+							removeAllVoxel();
+							for(var i = 0; i < lines.length; i++) {
+									if (lines[i].length > 0){
+										var res = lines[i].split(";");
+										var voxel = new THREE.Mesh( cubeGeo, cubeMaterial );
+										voxel.position.x = res[0];
+										voxel.position.y = res[1];
+										voxel.position.z = res[2];									
+										scene.add( voxel );
+										objects.push( voxel );
+									}
+							}
+							render();
+						};
+						reader.readAsText(f);
+					}
+					input.click();
+				}
+
+
+
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				event.preventDefault();				
+
+				console.log("Move");
+
+				rollOverMesh.visible = false;
+
+				mouse.set( ( event.clientX / window.innerWidth ) * 2 - 1, - ( event.clientY / window.innerHeight ) * 2 + 1 );
+
+				raycaster.setFromCamera( mouse, camera );
+
+				var intersects = raycaster.intersectObjects( objects );
+
+				if ( intersects.length > 0 ) {
+
+					var intersect = intersects[ 0 ];
+
+					rollOverMesh.position.copy( intersect.point ).add( intersect.face.normal );
+					rollOverMesh.position.divideScalar( unitbox ).floor().multiplyScalar( unitbox ).addScalar( unitbox / 2.0 );
+					rollOverMesh.visible = true;
+				}
+
+				render();
+
+			}
+
+			function onDocumentMouseDown( event ) {
+
+				event.preventDefault();
+				console.log("Down " + dragged);
+				controls.enableRotate = false;
+				setTimeout( function() { controls.enableRotate = true;  }, 100 );
+
+			}
+
+
+			function onDocumentMouseUp( event ) {
+
+				event.preventDefault();
+				console.log("Up" + dragged);	
+				if (dragged) return;
+				controls.enableRotate = true;
+
+				mouse.set( ( event.clientX / window.innerWidth ) * 2 - 1, - ( event.clientY / window.innerHeight ) * 2 + 1 );
+
+				raycaster.setFromCamera( mouse, camera );
+
+				var intersects = raycaster.intersectObjects( objects );
+
+				if ( intersects.length > 0 ) {
+
+					var intersect = intersects[ 0 ];
+
+					// delete cube
+
+					if ( isShiftDown ) {
+
+						if ( intersect.object != plane ) {
+
+							scene.remove( intersect.object );
+							objects.splice( objects.indexOf( intersect.object ), 1 );
+
+						}
+
+					// create cube
+
+					} else {
+						
+						var voxel = new THREE.Mesh( cubeGeo, cubeMaterial );
+						voxel.position.copy( intersect.point ).add( intersect.face.normal );
+						voxel.position.divideScalar( unitbox ).floor().multiplyScalar( unitbox ).addScalar( unitbox / 2.0 );
+						scene.add( voxel );
+						objects.push( voxel );
+
+					}
+
+					render();
+
+				}
+				setTimeout( function() { clicked = false;  }, 1000 );
+
+			}
+
+			function onDocumentKeyDown( event ) {
+
+				switch( event.keyCode ) {
+
+					case 16: isShiftDown = true; break;
+
+				}
+
+			}
+
+			function onDocumentKeyUp( event ) {
+
+				switch ( event.keyCode ) {
+
+					case 16: isShiftDown = false; break;
+
+				}
+
+			}
+
+
+			function onWindowResize() {
+				
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				render();
+
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+				render();
+			}
+
+			function render() {
+				renderer.render( scene, camera );
+			}
+
+
+
+			init();
+			animate();
+        
+        </script>
+    </body>
+</html>
