@@ -185,8 +185,11 @@
 			}
 
 			function onbtDownDataSTLClick() {
-
-				saveSTL(scene,"voxelscene.stl");
+				plane.visible = false;
+				rollOverMesh.visible = false;
+				saveSTL(scene,"voxelscene.stl");				
+				plane.visible = true;
+				rollOverMesh.visible = true;
 
 			}
 
@@ -201,7 +204,7 @@
 					data = data.concat(b.position.x).concat(';').concat(b.position.y).concat(';').concat(b.position.z).concat(";").concat(unitbox).concat(";").concat(b.material.color.getHexString());
 					data += "\r\n";
 				}				
-				download(data,'test.csv','text/csv');
+				download(data,'voxelscene.csv','text/csv');
 
 			}
 
