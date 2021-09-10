@@ -5,7 +5,7 @@ https://templatemo.com/tm-533-verticard
 
 body {
   font-family: "Open Sans", Arial, Helvetica, sans-serif;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 400;
   overflow-x: hidden;
   background-color: #eeeeee;
@@ -35,7 +35,7 @@ p {
 
 
 .tm-page-container {
-  max-width: 600px;
+  max-width: 500px;
   width: 100%;  
 }
 
@@ -51,7 +51,7 @@ p {
 
 .tm-nav {
   position: absolute;
-  right: -150px;
+  right: -200px;
   top: 45px;
 }
 
